@@ -14,27 +14,6 @@ static SDL_Window* win_handle;
 #else
 #define INCL_PM
 #include <os2.h>
-// Internal OS/2 driver data
-typedef struct _WINDATA {
-    SDL_Window     *window;
-    void					 *pOutput; /* Video output routines */
-    HWND            hwndFrame;
-    HWND            hwnd;
-    PFNWP           fnUserWndProc;
-    PFNWP           fnWndFrameProc;
-
-    void         		*pVOData; /* Video output data */
-
-    HRGN            hrgnShape;
-    HPOINTER        hptrIcon;
-    RECTL           rectlBeforeFS;
-
-    LONG            lSkipWMSize;
-    LONG            lSkipWMMove;
-    LONG            lSkipWMMouseMove;
-    LONG            lSkipWMVRNEnabled;
-    LONG            lSkipWMAdjustFramePos;
-} WINDATA;
 #endif
 
 
@@ -46,7 +25,7 @@ static void Window_SDLFail(const char* place) {
 	char strBuffer[256];
 	cc_string str;
 	String_InitArray_NT(str, strBuffer);
-
+        
 	String_Format2(&str, "Error when %c: %c", place, SDL_GetError());
 	str.buffer[str.length] = '\0';
 	Logger_Abort(str.buffer);
@@ -78,7 +57,7 @@ static void DoCreateWindow(int width, int height, int flags) {
 	/* TODO grab using SDL_SetWindowGrab? seems to be unnecessary on Linux at least */
 }
 void Window_Create2D(int width, int height) { DoCreateWindow(width, height, 0); }
-#if !defined CC_BUILD_SOFTGPU
+#if !defined CC_BUILD_SOFTGPU && !defined(CC_BUILD_PORTABLEGL)
 void Window_Create3D(int width, int height) { DoCreateWindow(width, height, SDL_WINDOW_OPENGL); }
 #else
 void Window_Create3D(int width, int height) { DoCreateWindow(width, height, 0); }
@@ -314,21 +293,20 @@ cc_result Window_OpenFileDialog(const struct OpenFileDialogArgs* args) {
 #if defined CC_BUILD_OS2
 	FILEDLG fileDialog;
 	HWND hDialog;
-
+	
 	memset(&fileDialog, 0, sizeof(FILEDLG));
 	fileDialog.cbSize = sizeof(FILEDLG);
 	fileDialog.fl = FDS_HELPBUTTON | FDS_CENTER | FDS_PRELOAD_VOLINFO | FDS_OPEN_DIALOG;
-	fileDialog.pszTitle = args->description;
-	fileDialog.pszOKButton = NULL;
+	fileDialog.pszTitle = (PSZ)args->description;
 	fileDialog.pfnDlgProc = WinDefFileDlgProc;
+	Mem_Copy(fileDialog.szFullFile, "", 1);
 
-	Mem_Copy(fileDialog.szFullFile, *args->filters, CCHMAXPATH);
 	hDialog = WinFileDlg(HWND_DESKTOP, 0, &fileDialog);
-	if (fileDialog.lReturn == DID_OK) {
+	if (hDialog != NULLHANDLE && fileDialog.lReturn == DID_OK) {
 		cc_string temp = String_FromRaw(fileDialog.szFullFile, CCHMAXPATH); 
 		args->Callback(&temp);
 	}
-	
+
 	return 0;
 #else
 	return ERR_NOT_SUPPORTED;
@@ -343,13 +321,13 @@ cc_result Window_SaveFileDialog(const struct SaveFileDialogArgs* args) {
 	memset(&fileDialog, 0, sizeof(FILEDLG));
 	fileDialog.cbSize = sizeof(FILEDLG);
 	fileDialog.fl = FDS_HELPBUTTON | FDS_CENTER | FDS_PRELOAD_VOLINFO | FDS_SAVEAS_DIALOG;
-	fileDialog.pszTitle = args->titles;
+	fileDialog.pszTitle = (PSZ)args->titles;
 	fileDialog.pszOKButton = NULL;
 	fileDialog.pfnDlgProc = WinDefFileDlgProc;
-
 	Mem_Copy(fileDialog.szFullFile, *args->filters, CCHMAXPATH);
-	hDialog = WinFileDlg(HWND_DESKTOP, 0, &fileDialog);
-	if (fileDialog.lReturn == DID_OK) {
+	
+	hDialog = WinFileDlg(HWND_DESKTOP, HWND_DESKTOP, &fileDialog);
+	if (hDialog != NULLHANDLE && fileDialog.lReturn == DID_OK) {
 		cc_string temp = String_FromRaw(fileDialog.szFullFile, CCHMAXPATH);
 		args->Callback(&temp);
 	}
@@ -380,7 +358,7 @@ void Window_AllocFramebuffer(struct Bitmap* bmp) {
 	} else {
 		/* Fast path: 32 bit pixels */
 		if (SDL_MUSTLOCK(win_surface)) {
-			int ret = SDL_LockSurface(win_surface);
+			int ret = SDL_LockSurface(win_surface);             
 			if (ret < 0) Window_SDLFail("locking window surface");
 		}
 		bmp->scan0 = win_surface->pixels;
@@ -426,7 +404,46 @@ void Window_DisableRawMouse(void) {
 /*########################################################################################################################*
 *-----------------------------------------------------OpenGL context------------------------------------------------------*
 *#########################################################################################################################*/
-#if defined CC_BUILD_GL && !defined CC_BUILD_EGL
+#if defined CC_BUILD_GL 
+#if defined CC_BUILD_PORTABLEGL
+#include <portablegl.h>
+
+static glContext win_ctx;
+
+void GLContext_Create(void) {
+	u32 *buffer = NULL;
+	int rc, width, height;
+
+	SDL_GetWindowSize(win_handle, &width, &height);
+	rc = init_glContext(&win_ctx, &buffer, 
+		  width, height, DisplayInfo.Depth, 
+		  0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+	if (!rc) Logger_Abort2(rc, "creating OpenGL context");
+	set_glContext(&win_ctx);
+}
+
+void GLContext_Update(void) { }
+cc_bool GLContext_TryRestore(void) { return true; }
+void GLContext_Free(void) {
+	free_glContext(&win_ctx);
+}
+
+void* GLContext_GetAddress(const char* function) {
+	return SDL_GL_GetProcAddress(function);
+}
+
+cc_bool GLContext_SwapBuffers(void) {
+	SDL_GL_SwapWindow(win_handle);
+	return true;
+}
+
+void GLContext_SetFpsLimit(cc_bool vsync, float minFrameMs) {
+	SDL_GL_SetSwapInterval(vsync);
+}
+
+void GLContext_GetApiInfo(cc_string* info) { }
+
+#elif !defined CC_BUILD_EGL
 static SDL_GLContext win_ctx;
 
 void GLContext_Create(void) {
@@ -469,5 +486,6 @@ void GLContext_SetFpsLimit(cc_bool vsync, float minFrameMs) {
 }
 void GLContext_GetApiInfo(cc_string* info) { }
 
+#endif
 #endif
 #endif

@@ -36,7 +36,11 @@ static void GL_UpdateVsync(void) {
 static void GLBackend_Init(void);
 void Gfx_Create(void) {
 	GLContext_Create();
+#if !defined CC_BUILD_PORTABLEGL
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &Gfx.MaxTexWidth);
+#else
+	Gfx.MaxTexWidth = 1024;
+#endif
 	Gfx.MaxTexHeight = Gfx.MaxTexWidth;
 	Gfx.Created      = true;
 	/* necessary for android which "loses" context when window is closed */
