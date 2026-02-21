@@ -608,7 +608,6 @@ typedef cc_uint8  cc_bool;
 // TODO We deactivate the OS/2 audio, because we get hard system crashes upon app exit.
 	//#define DEFAULT_AUD_BACKEND CC_AUD_BACKEND_OS2
 	#define DEFAULT_AUD_BACKEND CC_AUD_BACKEND_NULL
-	#define CC_BUILD_MAXSTACK (1024 * 1024)
 #elif defined PLAT_SATURN
 	#define CC_BUILD_SATURN
 	#define CC_BUILD_CONSOLE

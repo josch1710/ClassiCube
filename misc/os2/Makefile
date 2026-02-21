@@ -3,18 +3,21 @@ BUILD_DIR 	:=	build/os2
 SOURCE_DIR	:=	src
 BEARSSL			:=	1
 
-C_SOURCES		:= $(wildcard $(SOURCE_DIR)/*.c)
-
 BEARSSL_LIB := $(BUILD_DIR)/libbearssl.a
 BEARSSL_SOURCES := $(wildcard third_party/bearssl/*.c)
 BEARSSL_OBJECTS := $(patsubst third_party/bearssl/%.c, $(BUILD_DIR)/bearssl/%.o, $(BEARSSL_SOURCES))
 
+C_SOURCES		:= $(wildcard $(SOURCE_DIR)/*.c)
 C_OBJECTS		:= $(patsubst $(SOURCE_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
+
+C_OS2_SOURCES		:= $(wildcard $(SOURCE_DIR)/os2/*.c)
+C_OS2_OBJECTS		:= $(patsubst $(SOURCE_DIR)/os2/%.c, $(BUILD_DIR)/%.o, $(C_OS2_SOURCES))
+
+OBJECTS					:= $(C_OBJECTS) $(C_OS2_OBJECTS) $(BUILD_DIR)/$(TARGET).res
 ifeq ($(BEARSSL), 1)
-	OBJECTS			:= $(C_OBJECTS) $(BUILD_DIR)/$(TARGET).res $(BEARSSL_LIB)
-else
-	OBJECTS			:= $(C_OBJECTS) $(BUILD_DIR)/$(TARGET).res
+	OBJECTS	+= $(BEARSSL_LIB)
 endif
+
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
@@ -37,6 +40,9 @@ $(BUILD_DIR):
 
 $(BUILD_DIR)/%.o : $(SOURCE_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o : $(SOURCE_DIR)/os2/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -I $(SOURCE_DIR) -c $< -o $@
 
 $(BUILD_DIR)/$(TARGET).res: misc/os2/$(TARGET).rc misc/os2/$(TARGET).ico
 	wrc -r misc/os2/$(TARGET).rc -fo=$@
