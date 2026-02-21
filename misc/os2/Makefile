@@ -9,10 +9,6 @@ BEARSSL_LIB := $(BUILD_DIR)/libbearssl.a
 BEARSSL_SOURCES := $(wildcard third_party/bearssl/*.c)
 BEARSSL_OBJECTS := $(patsubst third_party/bearssl/%.c, $(BUILD_DIR)/bearssl/%.o, $(BEARSSL_SOURCES))
 
-ifeq ($(BEARSSL),1)
-	C_SOURCES			+= $(wildcard third_party/bearssl/*.c)
-endif
-
 C_OBJECTS		:= $(patsubst $(SOURCE_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
 ifeq ($(BEARSSL), 1)
 	OBJECTS			:= $(C_OBJECTS) $(BUILD_DIR)/$(TARGET).res $(BEARSSL_LIB)
